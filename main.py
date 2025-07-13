@@ -75,15 +75,25 @@ class TradingSignalGenerator:
         }
         
         try:
+            # Debug: Show the API key being used (masked for security)
+            masked_key = self.api_key[:4] + "*" * (len(self.api_key) - 8) + self.api_key[-4:] if len(self.api_key) > 8 else "****"
+            st.info(f"🔑 Using API key: {masked_key}")
+            
             response = requests.get(self.base_url, params=params, timeout=10)
             data = response.json()
             
+            # Debug: Show the full response for troubleshooting
+            st.write("🔍 API Response:", data)
+            
             # Check for API errors
             if 'Error Message' in data:
-                st.error(f"API Error: {data['Error Message']}")
+                st.error(f"❌ API Error: {data['Error Message']}")
                 return None
             if 'Note' in data:
-                st.warning(f"API Note: {data['Note']} (Rate limit reached)")
+                st.warning(f"⚠️ API Note: {data['Note']} (Rate limit reached)")
+                return None
+            if 'Information' in data:
+                st.warning(f"ℹ️ API Info: {data['Information']}")
                 return None
             
             if f'Time Series FX ({interval})' in data:
@@ -91,15 +101,17 @@ class TradingSignalGenerator:
                 df.index = pd.to_datetime(df.index)
                 df = df.astype(float)
                 df.columns = ['open', 'high', 'low', 'close']
+                st.success(f"✅ Successfully fetched {len(df)} data points for {from_symbol}/{to_symbol}")
                 return df.sort_index()
             else:
-                st.error(f"No data found for {from_symbol}/{to_symbol}")
+                st.error(f"❌ No data found for {from_symbol}/{to_symbol}")
+                st.write("Available keys in response:", list(data.keys()) if isinstance(data, dict) else "No keys")
                 return None
         except requests.exceptions.RequestException as e:
-            st.error(f"Network error: {str(e)}")
+            st.error(f"❌ Network error: {str(e)}")
             return None
         except Exception as e:
-            st.error(f"Error fetching data: {str(e)}")
+            st.error(f"❌ Error fetching data: {str(e)}")
             return None
     
     def get_crypto_data(self, symbol, market="USD", interval="15min"):
@@ -140,6 +152,30 @@ class TradingSignalGenerator:
         except Exception as e:
             st.error(f"Error fetching data: {str(e)}")
             return None
+    
+    def test_api_key(self):
+        """Test if the API key is valid"""
+        params = {
+            'function': 'TIME_SERIES_INTRADAY',
+            'symbol': 'IBM',
+            'interval': '1min',
+            'apikey': self.api_key
+        }
+        
+        try:
+            response = requests.get(self.base_url, params=params, timeout=10)
+            data = response.json()
+            
+            if 'Error Message' in data:
+                return False, f"Invalid API key: {data['Error Message']}"
+            elif 'Note' in data:
+                return False, f"Rate limit reached: {data['Note']}"
+            elif 'Information' in data:
+                return False, f"API info: {data['Information']}"
+            else:
+                return True, "API key is valid"
+        except Exception as e:
+            return False, f"Error testing API: {str(e)}"
     
     def get_technical_indicators(self, symbol, indicator, interval="daily", time_period=14):
         """Get technical indicators from Alpha Vantage"""
@@ -365,6 +401,15 @@ def main():
     
     # Auto-refresh
     auto_refresh = st.sidebar.checkbox("Auto Refresh (30s)")
+    
+    # Test API key button
+    if st.sidebar.button("🔑 Test API Key"):
+        with st.spinner("Testing API key..."):
+            is_valid, message = st.session_state.signal_generator.test_api_key()
+            if is_valid:
+                st.success(f"✅ {message}")
+            else:
+                st.error(f"❌ {message}")
     
     if st.sidebar.button("Generate Signals") or auto_refresh:
         with st.spinner("Fetching market data..."):
