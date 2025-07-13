@@ -18,7 +18,7 @@ st.set_page_config(
 # API Configuration
 ALPHA_VANTAGE_KEY = os.getenv("ALPHA_VANTAGE_KEY", "FAA6B54PAH8QH33Y")  # Get free key from Alpha Vantage
 
-def generate_sample_data(symbol="EUR/USD", periods=100):
+def generate_sample_data(symbol="EUR/USD", periods=100, interval="15min"):
     """Generate sample data for demo purposes"""
     import numpy as np
     from datetime import datetime, timedelta
@@ -27,7 +27,10 @@ def generate_sample_data(symbol="EUR/USD", periods=100):
     base_price = 1.1000 if "EUR" in symbol else 1.3000 if "GBP" in symbol else 0.7500
     np.random.seed(42)  # For reproducible results
     
-    dates = [datetime.now() - timedelta(minutes=15*i) for i in range(periods)]
+    # Calculate time interval in minutes
+    interval_minutes = int(interval.replace('min', ''))
+    
+    dates = [datetime.now() - timedelta(minutes=interval_minutes*i) for i in range(periods)]
     dates.reverse()
     
     prices = []
@@ -190,10 +193,21 @@ class SignalAnalyzer:
         lower_band = rolling_mean - (rolling_std * num_std)
         return upper_band, rolling_mean, lower_band
     
-    def generate_signals(self, df):
+    def generate_signals(self, df, interval="15min"):
         """Generate trading signals based on multiple indicators"""
         if df is None or len(df) < 50:
             return None
+        
+        # Adjust sensitivity based on timeframe
+        if interval == "1min":
+            rsi_oversold = 25  # More sensitive for 1min
+            rsi_overbought = 75
+        elif interval == "5min":
+            rsi_oversold = 28
+            rsi_overbought = 72
+        else:
+            rsi_oversold = 30  # Standard for longer timeframes
+            rsi_overbought = 70
         
         # Calculate indicators
         df['rsi'] = self.calculate_rsi(df['close'])
@@ -210,9 +224,9 @@ class SignalAnalyzer:
         signals = []
         
         # RSI signals
-        if df['rsi'].iloc[-1] < 30:
+        if df['rsi'].iloc[-1] < rsi_oversold:
             signals.append(("RSI", "BUY", "Oversold", 0.7))
-        elif df['rsi'].iloc[-1] > 70:
+        elif df['rsi'].iloc[-1] > rsi_overbought:
             signals.append(("RSI", "SELL", "Overbought", 0.7))
         
         # MACD signals
@@ -309,6 +323,10 @@ def main():
     st.title("🤖 AI Trading Signal Generator")
     st.markdown("### Real-time forex and crypto trading signals powered by technical analysis")
     
+    # Add note about 1-minute data
+    if interval == "1min":
+        st.info("⚠️ **1-minute data**: High frequency signals may generate more noise. Consider using longer timeframes for more reliable signals.")
+    
     # Sidebar controls
     st.sidebar.header("Settings")
     
@@ -325,7 +343,19 @@ def main():
         from_currency = symbol
         to_currency = "USD"
     
-    interval = st.sidebar.selectbox("Timeframe", ["15min", "30min", "60min"])
+    interval = st.sidebar.selectbox("Timeframe", ["1min", "5min", "15min", "30min", "60min"])
+    
+    # Show timeframe info
+    timeframe_info = {
+        "1min": "Ultra-short term, high frequency signals",
+        "5min": "Short term, quick momentum changes", 
+        "15min": "Medium term, balanced signals",
+        "30min": "Medium-long term, trend following",
+        "60min": "Long term, major trend analysis"
+    }
+    
+    if st.sidebar.checkbox("Show timeframe info"):
+        st.sidebar.info(f"**{interval}**: {timeframe_info[interval]}")
     
     # Initialize components
     if 'signal_generator' not in st.session_state:
@@ -350,7 +380,7 @@ def main():
             
             if df is not None:
                 # Generate signals
-                signals_data = signal_analyzer.generate_signals(df)
+                signals_data = signal_analyzer.generate_signals(df, interval)
                 
                 if signals_data:
                     # Display overall signal
@@ -415,8 +445,8 @@ def main():
                 st.info("💡 Get a free API key from [Alpha Vantage](https://www.alphavantage.co/support/#api-key) for real data.")
                 
                 # Generate sample data
-                sample_df = generate_sample_data(symbol, 100)
-                signals_data = signal_analyzer.generate_signals(sample_df)
+                sample_df = generate_sample_data(symbol, 100, interval)
+                signals_data = signal_analyzer.generate_signals(sample_df, interval)
                 
                 if signals_data:
                     # Display demo notice
