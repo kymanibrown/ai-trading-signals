@@ -18,6 +18,43 @@ st.set_page_config(
 # API Configuration
 ALPHA_VANTAGE_KEY = os.getenv("ALPHA_VANTAGE_KEY", "FAA6B54PAH8QH33Y")  # Get free key from Alpha Vantage
 
+def generate_sample_data(symbol="EUR/USD", periods=100):
+    """Generate sample data for demo purposes"""
+    import numpy as np
+    from datetime import datetime, timedelta
+    
+    # Generate realistic price data
+    base_price = 1.1000 if "EUR" in symbol else 1.3000 if "GBP" in symbol else 0.7500
+    np.random.seed(42)  # For reproducible results
+    
+    dates = [datetime.now() - timedelta(minutes=15*i) for i in range(periods)]
+    dates.reverse()
+    
+    prices = []
+    current_price = base_price
+    
+    for _ in range(periods):
+        # Random walk with some trend
+        change = np.random.normal(0, 0.001) + np.random.normal(0, 0.0005)
+        current_price += change
+        current_price = max(current_price, base_price * 0.95)  # Prevent negative prices
+        
+        # Generate OHLC data
+        high = current_price + abs(np.random.normal(0, 0.0005))
+        low = current_price - abs(np.random.normal(0, 0.0005))
+        open_price = current_price + np.random.normal(0, 0.0003)
+        close_price = current_price
+        
+        prices.append({
+            'open': open_price,
+            'high': high,
+            'low': low,
+            'close': close_price
+        })
+    
+    df = pd.DataFrame(prices, index=dates)
+    return df
+
 class TradingSignalGenerator:
     def __init__(self, api_key):
         self.api_key = api_key
@@ -34,16 +71,33 @@ class TradingSignalGenerator:
             'outputsize': 'full'
         }
         
-        response = requests.get(self.base_url, params=params)
-        data = response.json()
-        
-        if f'Time Series FX ({interval})' in data:
-            df = pd.DataFrame(data[f'Time Series FX ({interval})']).T
-            df.index = pd.to_datetime(df.index)
-            df = df.astype(float)
-            df.columns = ['open', 'high', 'low', 'close']
-            return df.sort_index()
-        return None
+        try:
+            response = requests.get(self.base_url, params=params, timeout=10)
+            data = response.json()
+            
+            # Check for API errors
+            if 'Error Message' in data:
+                st.error(f"API Error: {data['Error Message']}")
+                return None
+            if 'Note' in data:
+                st.warning(f"API Note: {data['Note']} (Rate limit reached)")
+                return None
+            
+            if f'Time Series FX ({interval})' in data:
+                df = pd.DataFrame(data[f'Time Series FX ({interval})']).T
+                df.index = pd.to_datetime(df.index)
+                df = df.astype(float)
+                df.columns = ['open', 'high', 'low', 'close']
+                return df.sort_index()
+            else:
+                st.error(f"No data found for {from_symbol}/{to_symbol}")
+                return None
+        except requests.exceptions.RequestException as e:
+            st.error(f"Network error: {str(e)}")
+            return None
+        except Exception as e:
+            st.error(f"Error fetching data: {str(e)}")
+            return None
     
     def get_crypto_data(self, symbol, market="USD", interval="15min"):
         """Get crypto data from Alpha Vantage"""
@@ -56,16 +110,33 @@ class TradingSignalGenerator:
             'outputsize': 'full'
         }
         
-        response = requests.get(self.base_url, params=params)
-        data = response.json()
-        
-        if f'Time Series Crypto ({interval})' in data:
-            df = pd.DataFrame(data[f'Time Series Crypto ({interval})']).T
-            df.index = pd.to_datetime(df.index)
-            df = df.astype(float)
-            df.columns = ['open', 'high', 'low', 'close']
-            return df.sort_index()
-        return None
+        try:
+            response = requests.get(self.base_url, params=params, timeout=10)
+            data = response.json()
+            
+            # Check for API errors
+            if 'Error Message' in data:
+                st.error(f"API Error: {data['Error Message']}")
+                return None
+            if 'Note' in data:
+                st.warning(f"API Note: {data['Note']} (Rate limit reached)")
+                return None
+            
+            if f'Time Series Crypto ({interval})' in data:
+                df = pd.DataFrame(data[f'Time Series Crypto ({interval})']).T
+                df.index = pd.to_datetime(df.index)
+                df = df.astype(float)
+                df.columns = ['open', 'high', 'low', 'close']
+                return df.sort_index()
+            else:
+                st.error(f"No data found for {symbol}/{market}")
+                return None
+        except requests.exceptions.RequestException as e:
+            st.error(f"Network error: {str(e)}")
+            return None
+        except Exception as e:
+            st.error(f"Error fetching data: {str(e)}")
+            return None
     
     def get_technical_indicators(self, symbol, indicator, interval="daily", time_period=14):
         """Get technical indicators from Alpha Vantage"""
@@ -339,7 +410,73 @@ def main():
                         st.warning("Mixed signals detected. Consider waiting for clearer market direction.")
             
             else:
-                st.error("Failed to fetch data. Check your API key and try again.")
+                # Use demo mode with sample data
+                st.warning("⚠️ API data unavailable. Using demo mode with sample data.")
+                st.info("💡 Get a free API key from [Alpha Vantage](https://www.alphavantage.co/support/#api-key) for real data.")
+                
+                # Generate sample data
+                sample_df = generate_sample_data(symbol, 100)
+                signals_data = signal_analyzer.generate_signals(sample_df)
+                
+                if signals_data:
+                    # Display demo notice
+                    st.success("🎯 Demo Mode Active - Showing sample data and signals")
+                    
+                    # Display overall signal
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        signal_color = {"BUY": "🟢", "SELL": "🔴", "NEUTRAL": "🟡"}[signals_data['overall']]
+                        st.metric("Overall Signal", 
+                                f"{signal_color} {signals_data['overall']}")
+                    
+                    with col2:
+                        st.metric("Buy Strength", f"{signals_data['buy_strength']:.2f}")
+                    
+                    with col3:
+                        st.metric("Sell Strength", f"{signals_data['sell_strength']:.2f}")
+                    
+                    # Display individual signals
+                    st.subheader("📊 Signal Details")
+                    for indicator, signal, reason, strength in signals_data['signals']:
+                        emoji = "🟢" if signal == "BUY" else "🔴"
+                        st.write(f"{emoji} **{indicator}**: {signal} - {reason} (Strength: {strength:.1f})")
+                    
+                    # Display chart
+                    st.subheader("📈 Technical Analysis Chart (Demo Data)")
+                    chart = create_chart(signals_data['data'], signals_data)
+                    st.plotly_chart(chart, use_container_width=True)
+                    
+                    # Display current price info
+                    current_price = sample_df['close'].iloc[-1]
+                    price_change = sample_df['close'].iloc[-1] - sample_df['close'].iloc[-2]
+                    price_change_pct = (price_change / sample_df['close'].iloc[-2]) * 100
+                    
+                    st.subheader("💰 Current Market Data (Demo)")
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("Price", f"{current_price:.5f}")
+                    with col2:
+                        st.metric("Change", f"{price_change:.5f}", f"{price_change_pct:.2f}%")
+                    with col3:
+                        st.metric("RSI", f"{signals_data['data']['rsi'].iloc[-1]:.1f}")
+                    with col4:
+                        st.metric("Volume Trend", "📈" if len(signals_data['signals']) > 0 else "📊")
+                    
+                    # Risk management suggestions
+                    st.subheader("⚠️ Risk Management")
+                    if signals_data['overall'] != "NEUTRAL":
+                        st.info(f"""
+                        **Suggested Action**: {signals_data['overall']}
+                        
+                        **Entry Strategy**: Wait for confirmation on next candle
+                        **Stop Loss**: Set 1-2% below/above entry point  
+                        **Take Profit**: Target 2-3% gain for favorable risk/reward ratio
+                        **Position Size**: Risk no more than 1-2% of portfolio
+                        """)
+                    else:
+                        st.warning("Mixed signals detected. Consider waiting for clearer market direction.")
         
         # Auto refresh logic
         if auto_refresh:
