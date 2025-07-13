@@ -96,9 +96,33 @@ class TradingSignalGenerator:
                 st.error(f"❌ No data found for {from_symbol}/{to_symbol}")
                 return None
             
-            # Rename columns to match our format
-            df.columns = ['open', 'high', 'low', 'close', 'volume']
-            df = df[['open', 'high', 'low', 'close']]  # Remove volume for now
+            # Check the actual columns and handle them properly
+            st.write(f"🔍 Debug: Actual columns = {list(df.columns)}")
+            
+            # Yahoo Finance columns are: Open, High, Low, Close, Volume, Dividends, Stock Splits
+            # We need to rename them to match our expected format
+            column_mapping = {
+                'Open': 'open',
+                'High': 'high', 
+                'Low': 'low',
+                'Close': 'close',
+                'Volume': 'volume'
+            }
+            
+            # Only rename columns that exist
+            for old_col, new_col in column_mapping.items():
+                if old_col in df.columns:
+                    df = df.rename(columns={old_col: new_col})
+            
+            # Select only the columns we need
+            available_cols = ['open', 'high', 'low', 'close']
+            existing_cols = [col for col in available_cols if col in df.columns]
+            
+            if len(existing_cols) < 4:
+                st.error(f"❌ Missing required columns. Available: {list(df.columns)}")
+                return None
+            
+            df = df[existing_cols]
             
             st.success(f"✅ Successfully fetched {len(df)} data points for {from_symbol}/{to_symbol}")
             return df
@@ -141,9 +165,33 @@ class TradingSignalGenerator:
                 st.error(f"❌ No data found for {symbol}")
                 return None
             
-            # Rename columns to match our format
-            df.columns = ['open', 'high', 'low', 'close', 'volume']
-            df = df[['open', 'high', 'low', 'close']]  # Remove volume for now
+            # Check the actual columns and handle them properly
+            st.write(f"🔍 Debug: Actual columns = {list(df.columns)}")
+            
+            # Yahoo Finance columns are: Open, High, Low, Close, Volume, Dividends, Stock Splits
+            # We need to rename them to match our expected format
+            column_mapping = {
+                'Open': 'open',
+                'High': 'high', 
+                'Low': 'low',
+                'Close': 'close',
+                'Volume': 'volume'
+            }
+            
+            # Only rename columns that exist
+            for old_col, new_col in column_mapping.items():
+                if old_col in df.columns:
+                    df = df.rename(columns={old_col: new_col})
+            
+            # Select only the columns we need
+            available_cols = ['open', 'high', 'low', 'close']
+            existing_cols = [col for col in available_cols if col in df.columns]
+            
+            if len(existing_cols) < 4:
+                st.error(f"❌ Missing required columns. Available: {list(df.columns)}")
+                return None
+            
+            df = df[existing_cols]
             
             st.success(f"✅ Successfully fetched {len(df)} data points for {symbol}")
             return df
