@@ -323,10 +323,6 @@ def main():
     st.title("🤖 AI Trading Signal Generator")
     st.markdown("### Real-time forex and crypto trading signals powered by technical analysis")
     
-    # Add note about 1-minute data
-    if interval == "1min":
-        st.info("⚠️ **1-minute data**: High frequency signals may generate more noise. Consider using longer timeframes for more reliable signals.")
-    
     # Sidebar controls
     st.sidebar.header("Settings")
     
@@ -344,6 +340,10 @@ def main():
         to_currency = "USD"
     
     interval = st.sidebar.selectbox("Timeframe", ["1min", "5min", "15min", "30min", "60min"])
+    
+    # Add note about 1-minute data (after interval is defined)
+    if interval == "1min":
+        st.info("⚠️ **1-minute data**: High frequency signals may generate more noise. Consider using longer timeframes for more reliable signals.")
     
     # Show timeframe info
     timeframe_info = {
