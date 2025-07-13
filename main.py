@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import requests
+import yfinance as yf
 import numpy as np
 from datetime import datetime, timedelta
 import time
@@ -15,8 +15,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# API Configuration
-ALPHA_VANTAGE_KEY = "4LYC264MNUO1C2HB"  # Get free key from Alpha Vantage
+# Data Source Configuration
+DATA_SOURCE = "Yahoo Finance"  # More reliable than Alpha Vantage
 
 def generate_sample_data(symbol="EUR/USD", periods=100, interval="15min"):
     """Generate sample data for demo purposes"""
@@ -59,145 +59,110 @@ def generate_sample_data(symbol="EUR/USD", periods=100, interval="15min"):
     return df
 
 class TradingSignalGenerator:
-    def __init__(self, api_key):
-        self.api_key = api_key
-        self.base_url = "https://www.alphavantage.co/query"
+    def __init__(self):
+        self.data_source = "Yahoo Finance"
     
     def get_forex_data(self, from_symbol, to_symbol, interval="15min"):
-        """Get forex data from Alpha Vantage"""
-        params = {
-            'function': 'FX_INTRADAY',
-            'from_symbol': from_symbol,
-            'to_symbol': to_symbol,
-            'interval': interval,
-            'apikey': self.api_key,
-            'outputsize': 'full'
-        }
-        
+        """Get forex data from Yahoo Finance"""
         try:
-            # Debug: Show the API key being used (masked for security)
-            masked_key = self.api_key[:4] + "*" * (len(self.api_key) - 8) + self.api_key[-4:] if len(self.api_key) > 8 else "****"
-            st.info(f"🔑 Using API key: {masked_key}")
+            # Convert interval to Yahoo Finance format
+            interval_map = {
+                "1min": "1m",
+                "5min": "5m", 
+                "15min": "15m",
+                "30min": "30m",
+                "60min": "1h"
+            }
+            yf_interval = interval_map.get(interval, "15m")
             
-            response = requests.get(self.base_url, params=params, timeout=10)
-            data = response.json()
+            # Yahoo Finance forex symbols
+            symbol_map = {
+                "EUR/USD": "EURUSD=X",
+                "GBP/USD": "GBPUSD=X", 
+                "USD/JPY": "USDJPY=X",
+                "AUD/USD": "AUDUSD=X",
+                "USD/CAD": "USDCAD=X"
+            }
             
-            # Debug: Show the full response for troubleshooting
-            st.write("🔍 API Response:", data)
+            symbol = symbol_map.get(f"{from_symbol}/{to_symbol}", f"{from_symbol}{to_symbol}=X")
             
-            # Check for API errors
-            if 'Error Message' in data:
-                st.error(f"❌ API Error: {data['Error Message']}")
-                return None
-            if 'Note' in data:
-                st.warning(f"⚠️ API Note: {data['Note']} (Rate limit reached)")
-                return None
-            if 'Information' in data:
-                st.warning(f"ℹ️ API Info: {data['Information']}")
-                return None
+            st.info(f"📊 Fetching {symbol} data from Yahoo Finance...")
             
-            if f'Time Series FX ({interval})' in data:
-                df = pd.DataFrame(data[f'Time Series FX ({interval})']).T
-                df.index = pd.to_datetime(df.index)
-                df = df.astype(float)
-                df.columns = ['open', 'high', 'low', 'close']
-                st.success(f"✅ Successfully fetched {len(df)} data points for {from_symbol}/{to_symbol}")
-                return df.sort_index()
-            else:
+            # Get data from Yahoo Finance
+            ticker = yf.Ticker(symbol)
+            df = ticker.history(period="5d", interval=yf_interval)
+            
+            if df.empty:
                 st.error(f"❌ No data found for {from_symbol}/{to_symbol}")
-                st.write("Available keys in response:", list(data.keys()) if isinstance(data, dict) else "No keys")
                 return None
-        except requests.exceptions.RequestException as e:
-            st.error(f"❌ Network error: {str(e)}")
-            return None
+            
+            # Rename columns to match our format
+            df.columns = ['open', 'high', 'low', 'close', 'volume']
+            df = df[['open', 'high', 'low', 'close']]  # Remove volume for now
+            
+            st.success(f"✅ Successfully fetched {len(df)} data points for {from_symbol}/{to_symbol}")
+            return df
+            
         except Exception as e:
-            st.error(f"❌ Error fetching data: {str(e)}")
+            st.error(f"❌ Error fetching forex data: {str(e)}")
             return None
     
     def get_crypto_data(self, symbol, market="USD", interval="15min"):
-        """Get crypto data from Alpha Vantage"""
-        params = {
-            'function': 'CRYPTO_INTRADAY',
-            'symbol': symbol,
-            'market': market,
-            'interval': interval,
-            'apikey': self.api_key,
-            'outputsize': 'full'
-        }
-        
+        """Get crypto data from Yahoo Finance"""
         try:
-            response = requests.get(self.base_url, params=params, timeout=10)
-            data = response.json()
+            # Convert interval to Yahoo Finance format
+            interval_map = {
+                "1min": "1m",
+                "5min": "5m", 
+                "15min": "15m",
+                "30min": "30m",
+                "60min": "1h"
+            }
+            yf_interval = interval_map.get(interval, "15m")
             
-            # Check for API errors
-            if 'Error Message' in data:
-                st.error(f"API Error: {data['Error Message']}")
-                return None
-            if 'Note' in data:
-                st.warning(f"API Note: {data['Note']} (Rate limit reached)")
+            # Yahoo Finance crypto symbols
+            symbol_map = {
+                "BTC": "BTC-USD",
+                "ETH": "ETH-USD",
+                "ADA": "ADA-USD", 
+                "DOT": "DOT-USD",
+                "LINK": "LINK-USD"
+            }
+            
+            yf_symbol = symbol_map.get(symbol, f"{symbol}-USD")
+            
+            st.info(f"📊 Fetching {yf_symbol} data from Yahoo Finance...")
+            
+            # Get data from Yahoo Finance
+            ticker = yf.Ticker(yf_symbol)
+            df = ticker.history(period="5d", interval=yf_interval)
+            
+            if df.empty:
+                st.error(f"❌ No data found for {symbol}")
                 return None
             
-            if f'Time Series Crypto ({interval})' in data:
-                df = pd.DataFrame(data[f'Time Series Crypto ({interval})']).T
-                df.index = pd.to_datetime(df.index)
-                df = df.astype(float)
-                df.columns = ['open', 'high', 'low', 'close']
-                return df.sort_index()
-            else:
-                st.error(f"No data found for {symbol}/{market}")
-                return None
-        except requests.exceptions.RequestException as e:
-            st.error(f"Network error: {str(e)}")
-            return None
+            # Rename columns to match our format
+            df.columns = ['open', 'high', 'low', 'close', 'volume']
+            df = df[['open', 'high', 'low', 'close']]  # Remove volume for now
+            
+            st.success(f"✅ Successfully fetched {len(df)} data points for {symbol}")
+            return df
+            
         except Exception as e:
-            st.error(f"Error fetching data: {str(e)}")
+            st.error(f"❌ Error fetching crypto data: {str(e)}")
             return None
     
-    def test_api_key(self):
-        """Test if the API key is valid"""
-        params = {
-            'function': 'TIME_SERIES_INTRADAY',
-            'symbol': 'IBM',
-            'interval': '1min',
-            'apikey': self.api_key
-        }
-        
+    def test_data_source(self):
+        """Test if Yahoo Finance is accessible"""
         try:
-            response = requests.get(self.base_url, params=params, timeout=10)
-            data = response.json()
-            
-            if 'Error Message' in data:
-                return False, f"Invalid API key: {data['Error Message']}"
-            elif 'Note' in data:
-                return False, f"Rate limit reached: {data['Note']}"
-            elif 'Information' in data:
-                return False, f"API info: {data['Information']}"
+            ticker = yf.Ticker("AAPL")
+            data = ticker.history(period="1d")
+            if not data.empty:
+                return True, "Yahoo Finance is working correctly"
             else:
-                return True, "API key is valid"
+                return False, "No data received from Yahoo Finance"
         except Exception as e:
-            return False, f"Error testing API: {str(e)}"
-    
-    def get_technical_indicators(self, symbol, indicator, interval="daily", time_period=14):
-        """Get technical indicators from Alpha Vantage"""
-        params = {
-            'function': indicator,
-            'symbol': symbol,
-            'interval': interval,
-            'time_period': time_period,
-            'series_type': 'close',
-            'apikey': self.api_key
-        }
-        
-        response = requests.get(self.base_url, params=params)
-        data = response.json()
-        
-        # Handle different indicator response formats
-        tech_key = f'Technical Analysis: {indicator}'
-        if tech_key in data:
-            df = pd.DataFrame(data[tech_key]).T
-            df.index = pd.to_datetime(df.index)
-            return df.sort_index()
-        return None
+            return False, f"Error accessing Yahoo Finance: {str(e)}"
 
 class SignalAnalyzer:
     @staticmethod
@@ -395,17 +360,17 @@ def main():
     
     # Initialize components
     if 'signal_generator' not in st.session_state:
-        st.session_state.signal_generator = TradingSignalGenerator(ALPHA_VANTAGE_KEY)
+        st.session_state.signal_generator = TradingSignalGenerator()
     
     signal_analyzer = SignalAnalyzer()
     
     # Auto-refresh
     auto_refresh = st.sidebar.checkbox("Auto Refresh (30s)")
     
-    # Test API key button
-    if st.sidebar.button("🔑 Test API Key"):
-        with st.spinner("Testing API key..."):
-            is_valid, message = st.session_state.signal_generator.test_api_key()
+    # Test data source button
+    if st.sidebar.button("🔑 Test Data Source"):
+        with st.spinner("Testing Yahoo Finance..."):
+            is_valid, message = st.session_state.signal_generator.test_data_source()
             if is_valid:
                 st.success(f"✅ {message}")
             else:
