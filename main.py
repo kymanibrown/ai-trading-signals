@@ -87,13 +87,18 @@ class TradingSignalGenerator:
             symbol = symbol_map.get(f"{from_symbol}/{to_symbol}", f"{from_symbol}{to_symbol}=X")
             
             st.info(f"📊 Fetching {symbol} data from Yahoo Finance...")
+            st.write(f"🔍 Debug: from_symbol={from_symbol}, to_symbol={to_symbol}, interval={interval}")
             
             # Get data from Yahoo Finance
             ticker = yf.Ticker(symbol)
+            st.write(f"🔍 Debug: Ticker created for {symbol}")
+            
             df = ticker.history(period="5d", interval=yf_interval)
+            st.write(f"🔍 Debug: Data shape = {df.shape}, Columns = {list(df.columns)}")
             
             if df.empty:
                 st.error(f"❌ No data found for {from_symbol}/{to_symbol}")
+                st.write(f"🔍 Debug: Empty dataframe for {symbol}")
                 return None
             
             # Rename columns to match our format
@@ -105,6 +110,9 @@ class TradingSignalGenerator:
             
         except Exception as e:
             st.error(f"❌ Error fetching forex data: {str(e)}")
+            st.write(f"🔍 Debug: Full error = {e}")
+            import traceback
+            st.write(f"🔍 Debug: Traceback = {traceback.format_exc()}")
             return None
     
     def get_crypto_data(self, symbol, market="USD", interval="15min"):
@@ -155,13 +163,34 @@ class TradingSignalGenerator:
     def test_data_source(self):
         """Test if Yahoo Finance is accessible"""
         try:
+            # Test with AAPL first
             ticker = yf.Ticker("AAPL")
             data = ticker.history(period="1d")
             if not data.empty:
-                return True, "Yahoo Finance is working correctly"
+                st.success("✅ AAPL test successful")
             else:
+                st.error("❌ AAPL test failed - no data")
                 return False, "No data received from Yahoo Finance"
+            
+            # Test with EURUSD
+            ticker = yf.Ticker("EURUSD=X")
+            data = ticker.history(period="1d")
+            if not data.empty:
+                st.success("✅ EURUSD test successful")
+            else:
+                st.warning("⚠️ EURUSD test failed - no data")
+            
+            # Test with BTC
+            ticker = yf.Ticker("BTC-USD")
+            data = ticker.history(period="1d")
+            if not data.empty:
+                st.success("✅ BTC test successful")
+            else:
+                st.warning("⚠️ BTC test failed - no data")
+            
+            return True, "Yahoo Finance is working correctly"
         except Exception as e:
+            st.error(f"❌ Error testing Yahoo Finance: {str(e)}")
             return False, f"Error accessing Yahoo Finance: {str(e)}"
 
 class SignalAnalyzer:
