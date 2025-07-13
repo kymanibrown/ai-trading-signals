@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 # API Configuration
-ALPHA_VANTAGE_KEY = os.getenv("ALPHA_VANTAGE_KEY", "YOUR_NEW_API_KEY_HERE")  # Get free key from Alpha Vantage
+ALPHA_VANTAGE_KEY = os.getenv("ALPHA_VANTAGE_KEY", "4LYC264MNUO1C2HB")  # Get free key from Alpha Vantage
 
 def generate_sample_data(symbol="EUR/USD", periods=100, interval="15min"):
     """Generate sample data for demo purposes"""
